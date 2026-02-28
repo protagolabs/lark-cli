@@ -85,7 +85,7 @@ export function registerDocCommands(program: Command): void {
 
         // Grant permission to specified user
         if (opts.owner) {
-          const permResp = await client.drive.permission.member.create({
+          const permResp = await client.drive.permissionMember.create({
             path: { token: documentId },
             params: { type: "docx", need_notification: false },
             data: {

@@ -21,6 +21,7 @@ export function registerDocCommands(program: Command): void {
     .description("Upload a markdown file as a Lark document")
     .option("--title <title>", "Document title (default: first heading or filename)")
     .option("--folder <folder_token>", "Target folder token")
+    .option("--owner <open_id>", "Grant full_access to this user (open_id) after creation")
     .action(async (file: string, opts: any, cmd: Command) => {
       const json = cmd.optsWithGlobals().json;
 
@@ -80,6 +81,20 @@ export function registerDocCommands(program: Command): void {
             },
           });
           checkResponse(addResp);
+        }
+
+        // Grant permission to specified user
+        if (opts.owner) {
+          const permResp = await client.drive.permission.member.create({
+            path: { token: documentId },
+            params: { type: "docx", need_notification: false },
+            data: {
+              member_type: "openid",
+              member_id: opts.owner,
+              perm: "full_access",
+            },
+          });
+          checkResponse(permResp);
         }
 
         const docUrl = `https://larksuite.com/docx/${documentId}`;

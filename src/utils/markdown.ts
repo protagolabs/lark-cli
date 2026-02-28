@@ -14,7 +14,7 @@ const BLOCK_TYPE = {
   CODE: 14,
   QUOTE: 15,
   TODO: 17,
-  DIVIDER: 18,
+  DIVIDER: 22,
 } as const;
 
 const HEADING_TAG_MAP: Record<string, number> = {

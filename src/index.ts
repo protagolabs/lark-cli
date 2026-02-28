@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { registerBitableCommands } from "./commands/bitable.js";
+import { registerDocCommands } from "./commands/doc.js";
 import { registerMessageCommands } from "./commands/message.js";
 
 const program = new Command();
@@ -11,6 +12,7 @@ program
   .option("--json", "Output raw JSON instead of formatted tables", false);
 
 registerBitableCommands(program);
+registerDocCommands(program);
 registerMessageCommands(program);
 
 program.parse();

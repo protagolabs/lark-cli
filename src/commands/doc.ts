@@ -238,4 +238,55 @@ export function registerDocCommands(program: Command): void {
         exitWithError(e.message ?? e);
       }
     });
+
+  doc
+    .command("read <document_id>")
+    .description("Read content of a Lark document")
+    .option("--blocks", "Output structured block data instead of plain text")
+    .action(async (documentId: string, opts: any, cmd: Command) => {
+      const json = cmd.optsWithGlobals().json;
+
+      try {
+        // Get document metadata
+        const docResp = await larkApi("GET", `/docx/v1/documents/${documentId}`);
+        const doc = docResp.data?.document;
+        if (!doc) return exitWithError("Document not found.");
+
+        if (opts.blocks || json) {
+          // Fetch all blocks with pagination
+          const allBlocks: any[] = [];
+          let pageToken: string | undefined;
+
+          do {
+            const params: Record<string, string | number> = { page_size: 500 };
+            if (pageToken) params.page_token = pageToken;
+
+            const resp = await larkApi(
+              "GET",
+              `/docx/v1/documents/${documentId}/blocks`,
+              undefined,
+              params,
+            );
+
+            const items = resp.data?.items ?? [];
+            allBlocks.push(...items);
+            pageToken = resp.data?.has_more ? resp.data?.page_token : undefined;
+          } while (pageToken);
+
+          return printJson({ document: doc, blocks: allBlocks });
+        }
+
+        // Default: plain text output
+        const rawResp = await larkApi(
+          "GET",
+          `/docx/v1/documents/${documentId}/raw_content`,
+        );
+        const content: string = rawResp.data?.content ?? "";
+
+        console.log(chalk.dim(`# ${doc.title}\n`));
+        console.log(content);
+      } catch (e: any) {
+        exitWithError(e.message ?? e);
+      }
+    });
 }

@@ -240,16 +240,36 @@ export function registerDocCommands(program: Command): void {
     });
 
   doc
-    .command("read <document_id>")
-    .description("Read content of a Lark document")
+    .command("read <token>")
+    .description("Read content of a Lark document or wiki page")
     .option("--blocks", "Output structured block data instead of plain text")
-    .action(async (documentId: string, opts: any, cmd: Command) => {
+    .action(async (token: string, opts: any, cmd: Command) => {
       const json = cmd.optsWithGlobals().json;
 
       try {
-        // Get document metadata
-        const docResp = await larkApi("GET", `/docx/v1/documents/${documentId}`);
-        const doc = docResp.data?.document;
+        // Resolve token: try docx first, fall back to wiki node resolution
+        let documentId = token;
+        let docResp = await larkApi("GET", `/docx/v1/documents/${token}`).catch(() => null);
+
+        if (!docResp?.data?.document) {
+          // Try resolving as wiki token
+          const wikiResp = await larkApi(
+            "GET",
+            "/wiki/v2/spaces/get_node",
+            undefined,
+            { token },
+          );
+          const node = wikiResp.data?.node;
+          if (!node?.obj_token) return exitWithError("Document not found (tried docx and wiki).");
+          if (node.obj_type !== "docx") {
+            return exitWithError(`Wiki node is type "${node.obj_type}", only "docx" is supported.`);
+          }
+          console.log(chalk.dim(`Resolved wiki → docx ${node.obj_token}`));
+          documentId = node.obj_token;
+          docResp = await larkApi("GET", `/docx/v1/documents/${documentId}`);
+        }
+
+        const doc = docResp!.data?.document;
         if (!doc) return exitWithError("Document not found.");
 
         if (opts.blocks || json) {

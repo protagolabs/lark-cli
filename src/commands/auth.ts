@@ -68,8 +68,11 @@ export function registerAuthCommands(program: Command): void {
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end(
               "<h2>Authorization successful!</h2><p>You can close this tab and return to the terminal.</p>",
+              () => {
+                server.closeAllConnections();
+                server.close();
+              },
             );
-            server.close();
             resolve(code);
           });
 

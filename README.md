@@ -111,17 +111,17 @@ lark msg send --to <id> --msg-type post --content '{"zh_cn":{"title":"Title","co
 
 ## Lark App Permissions
 
-Required API scopes (enable in app console under **Permissions & Scopes**):
+Enable the required scopes in the app console under **Permissions & Scopes**. Only add scopes for features you use.
 
-| Feature | Scope |
-|---------|-------|
-| Documents | `docx:document` |
-| Drive / permissions | `drive:drive` |
-| Wiki read | `wiki:wiki:readonly` |
-| Bitable | `bitable:app` |
-| Messaging | `im:message:create` |
+| Feature | Scope | Required for |
+|---------|-------|-------------|
+| `docx:document` | Documents | `doc upload`, `doc update`, `doc read` |
+| `wiki:wiki:readonly` | Wiki | `doc read <wiki_token>` |
+| `drive:drive` | Drive permissions | `doc upload --owner` |
+| `bitable:app` | Bitable | All `bitable` commands |
+| `im:message` | Messaging | `msg send` |
 
-For user identity, enable these as **User Token Scopes**. For app identity, enable as **App Token Scopes**.
+For user identity (OAuth2), enable these as **User Token Scopes** and add them to the `SCOPES` array in `src/commands/auth.ts`. For app identity, enable as **App Token Scopes**.
 
 ## Tech Stack
 

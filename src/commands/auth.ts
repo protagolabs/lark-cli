@@ -14,6 +14,9 @@ import { exchangeCodeForToken } from "../utils/lark-api.js";
 const CALLBACK_PORT = 9876;
 const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}/callback`;
 
+/** OAuth scopes required by the CLI. Must also be enabled in the Lark app console. */
+const SCOPES = ["docx:document"].join(" ");
+
 /**
  * Register all auth subcommands on the given commander program.
  *
@@ -34,6 +37,7 @@ export function registerAuthCommands(program: Command): void {
           `https://open.larksuite.com/open-apis/authen/v1/authorize` +
           `?app_id=${app_id}` +
           `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+          `&scope=${encodeURIComponent(SCOPES)}` +
           `&state=${state}`;
 
         // Wait for OAuth callback with authorization code

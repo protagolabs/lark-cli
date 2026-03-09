@@ -1,6 +1,6 @@
 # lark-cli
 
-CLI tool for Lark/Feishu Open API. Supports bitable (multi-dimensional table) CRUD and messaging.
+CLI tool for Lark/Feishu Open API. Supports document upload/read, bitable CRUD, and messaging.
 
 ## Setup
 
@@ -19,7 +19,49 @@ Create `~/.lark_auth`:
 }
 ```
 
+## Authentication
+
+By default, commands run as the **app identity** (tenant token). To run as your **user identity** (e.g., so documents are owned by you), use OAuth2 login:
+
+```bash
+# Login — opens browser for authorization
+lark auth login
+
+# Check current identity
+lark auth status
+
+# Logout — revert to app identity
+lark auth logout
+```
+
+**Prerequisites for OAuth2:**
+
+1. In the Lark app console, add `http://localhost:9876/callback` to **Security Settings → Redirect URLs**
+2. Enable required **User Token Scopes** under **Permissions & Scopes** (e.g., `docx:document`)
+
+User tokens are auto-refreshed when expired. When the refresh token also expires, commands fall back to app identity.
+
 ## Usage
+
+### Documents
+
+```bash
+# Upload markdown as a Lark document
+lark doc upload ./README.md
+lark doc upload ./design.md --title "Design Doc" --folder <folder_token>
+lark doc upload ./notes.md --owner <open_id>  # grant user access after creation
+
+# Read a document (plain text)
+lark doc read <document_id>
+lark doc read <wiki_token>  # wiki pages auto-resolved
+
+# Read as structured block JSON
+lark doc read <document_id> --json
+
+# Update an existing document
+lark doc update <document_id> ./updated.md
+lark doc update <document_id> ./updated.md --resolve-comments
+```
 
 ### Bitable
 
@@ -69,13 +111,17 @@ lark msg send --to <id> --msg-type post --content '{"zh_cn":{"title":"Title","co
 
 ## Lark App Permissions
 
-Required API scopes:
+Required API scopes (enable in app console under **Permissions & Scopes**):
 
-- `bitable:app` or `bitable:app:readonly` — Bitable read/write
-- `im:message:create` — Send messages
-- `wiki:wiki:readonly` — If accessing bitable embedded in wiki
+| Feature | Scope |
+|---------|-------|
+| Documents | `docx:document` |
+| Drive / permissions | `drive:drive` |
+| Wiki read | `wiki:wiki:readonly` |
+| Bitable | `bitable:app` |
+| Messaging | `im:message:create` |
 
-The app must also be added as a document collaborator on the target bitable.
+For user identity, enable these as **User Token Scopes**. For app identity, enable as **App Token Scopes**.
 
 ## Tech Stack
 
@@ -83,3 +129,4 @@ The app must also be added as a document collaborator on the target bitable.
 - `@larksuiteoapi/node-sdk` — Official Lark SDK
 - `commander` — CLI framework
 - `chalk` + `cli-table3` — Output formatting
+- `markdown-it` — Markdown parsing for document upload

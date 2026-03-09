@@ -1,8 +1,13 @@
-import { getAuthConfig } from "../auth.js";
+import {
+  getAuthConfig,
+  hasValidRefreshToken,
+  hasValidUserToken,
+  saveUserTokens,
+} from "../auth.js";
 
 const BASE_URL = "https://open.larksuite.com/open-apis";
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
+let cachedTenantToken: { token: string; expiresAt: number } | null = null;
 
 /**
  * Get a tenant access token, caching until expiry.
@@ -11,8 +16,8 @@ let cachedToken: { token: string; expiresAt: number } | null = null;
  * @throws Error if token request fails.
  */
 async function getTenantToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
+  if (cachedTenantToken && Date.now() < cachedTenantToken.expiresAt) {
+    return cachedTenantToken.token;
   }
 
   const { app_id, app_secret } = getAuthConfig();
@@ -27,13 +32,88 @@ async function getTenantToken(): Promise<string> {
     throw new Error(`Failed to get tenant token: ${body.msg}`);
   }
 
-  cachedToken = {
+  cachedTenantToken = {
     token: body.tenant_access_token,
-    // Expire 5 minutes early to avoid edge cases
     expiresAt: Date.now() + (body.expire - 300) * 1000,
   };
 
-  return cachedToken.token;
+  return cachedTenantToken.token;
+}
+
+/**
+ * Get an app access token (needed for user token refresh).
+ *
+ * @returns The app access token string.
+ */
+async function getAppToken(): Promise<string> {
+  const { app_id, app_secret } = getAuthConfig();
+  const resp = await fetch(`${BASE_URL}/auth/v3/app_access_token/internal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ app_id, app_secret }),
+  });
+
+  const body = await resp.json();
+  if (body.code !== 0) {
+    throw new Error(`Failed to get app token: ${body.msg}`);
+  }
+  return body.app_access_token;
+}
+
+/**
+ * Refresh the user access token using the stored refresh token.
+ *
+ * @returns The new user access token.
+ * @throws Error if refresh fails.
+ */
+async function refreshUserToken(): Promise<string> {
+  const config = getAuthConfig();
+  const appToken = await getAppToken();
+
+  const resp = await fetch(`${BASE_URL}/authen/v1/oidc/refresh_access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${appToken}`,
+    },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      refresh_token: config.refresh_token,
+    }),
+  });
+
+  const body = await resp.json();
+  if (body.code !== 0) {
+    throw new Error(`Failed to refresh user token: ${body.msg}`);
+  }
+
+  const now = Date.now();
+  saveUserTokens({
+    user_access_token: body.data.access_token,
+    refresh_token: body.data.refresh_token,
+    token_expiry: now + body.data.expires_in * 1000 - 300_000,
+    refresh_expiry: now + body.data.refresh_expires_in * 1000 - 300_000,
+  });
+
+  return body.data.access_token;
+}
+
+/**
+ * Get the best available token. Prefers user_access_token (with auto-refresh),
+ * falls back to tenant_access_token.
+ *
+ * @returns Bearer token string.
+ */
+async function getToken(): Promise<string> {
+  if (hasValidUserToken()) {
+    return getAuthConfig().user_access_token!;
+  }
+
+  if (hasValidRefreshToken()) {
+    return refreshUserToken();
+  }
+
+  return getTenantToken();
 }
 
 /**
@@ -52,7 +132,7 @@ export async function larkApi(
   body?: unknown,
   params?: Record<string, string | number | boolean>,
 ): Promise<any> {
-  const token = await getTenantToken();
+  const token = await getToken();
 
   let url = `${BASE_URL}${path}`;
   if (params) {
@@ -82,4 +162,38 @@ export async function larkApi(
   }
 
   return json;
+}
+
+/**
+ * Exchange an authorization code for user tokens via OIDC.
+ *
+ * @param code - Authorization code from OAuth callback.
+ * @returns Object with access_token, refresh_token, and expiry info.
+ */
+export async function exchangeCodeForToken(code: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  refresh_expires_in: number;
+}> {
+  const appToken = await getAppToken();
+
+  const resp = await fetch(`${BASE_URL}/authen/v1/oidc/access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${appToken}`,
+    },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      code,
+    }),
+  });
+
+  const body = await resp.json();
+  if (body.code !== 0) {
+    throw new Error(`Failed to exchange code: ${body.msg}`);
+  }
+
+  return body.data;
 }
